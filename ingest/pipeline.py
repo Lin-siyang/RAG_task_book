@@ -1,51 +1,23 @@
-"""Step 1 —— 把《重点新材料研发及应用国家科技重大专项课题任务书》PDF 建成向量库。
+"""建库流水线 —— PDF 解析 → 切分 → 向量化 → ChromaDB 持久化。
 
 流程:
-    1. PyPDFLoader 逐页解析 PDF,每页一个 Document,metadata 里写入 {source, page}(页码从 1 开始)
+    1. PyPDFLoader 逐页解析 PDF,每页一个 Document,metadata 写入 {source, page}(页码从 1 开始)
     2. RecursiveCharacterTextSplitter 递归字符切分(中文标点也作为分隔符,兼容表格文本)
        每个片段自动继承所属页码的 metadata
-    3. 调用 qwen3.7-text-embedding-flash 生成向量 —— 该模型单次请求最多 20 条,
-       因此按 BATCH_SIZE=20 分批调用后写入 ChromaDB
-    4. 持久化存储到本目录下的 chromadb_data/,之后 02 号脚本直接读取,无需重复构建
-
-跑法:
-    python 01_ingest_project_pdf.py
+    3. 按 BATCH_SIZE 分批调用 embedding 并写入 ChromaDB(该模型单次请求最多 20 条)
+    4. 持久化存储到 chromadb_data/,问答脚本(rag_agent.py)直接读取,无需重复构建
 """
 
 from __future__ import annotations
 
 import shutil
-import sys
-from pathlib import Path
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
-from dotenv import load_dotenv
-
-# 从仓库根目录向上查找 .env(即 F:/AgentLearning/.env)
-for _parent in Path(__file__).resolve().parents:
-    if (_parent / ".env").exists():
-        load_dotenv(_parent / ".env")
-        break
-else:
-    load_dotenv()
-
-import os
-
-from langchain_community.document_loaders import PyPDFLoader
 from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-BASE_DIR = Path(__file__).resolve().parent
-RESOURCES_DIR = BASE_DIR / "resources"
-PDF_PATH = RESOURCES_DIR / "重点新材料研发及应用国家科技重大专项课题任务书.pdf"
-
-VECTOR_DIR = BASE_DIR / "chromadb_data"      # ChromaDB 持久化目录
-COLLECTION_NAME = "project_task_book"
-
-BATCH_SIZE = 20  # ⚠️ jumengai 的 qwen3.7-text-embedding-flash 单次最多处理 20 条
+from rag.config import BATCH_SIZE, COLLECTION_NAME, CHUNK_OVERLAP, CHUNK_SIZE, PDF_PATH, VECTOR_DIR
+from rag.models import build_embeddings
 
 
 def load_pages() -> list:
@@ -62,8 +34,8 @@ def load_pages() -> list:
 def split_pages(pages: list) -> list:
     """递归字符切分;中文表格/段落里常见的分隔符都纳入,尽量按语义边界切"""
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,        # 中文按字符数计,500 字符 ≈ 一小段/半张表
-        chunk_overlap=80,      # 片段间重叠,避免表格行被切断后丢失上下文
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
         separators=["\n\n", "\n", "。", "；", "，", " ", ""],
         add_start_index=True,  # metadata 里附带片段在原文中的起始下标,便于调试
     )
@@ -72,28 +44,14 @@ def split_pages(pages: list) -> list:
     return chunks
 
 
-def build_embeddings() -> OpenAIEmbeddings:
-    """qwen3.7-text-embedding-flash(OpenAI 兼容接口)。
-    check_embedding_ctx_length=False:不走 OpenAI 的 tiktoken 预切分,
-    chunk_size=20:langchain 内部每次 API 请求最多发 20 条。
-    """
-    return OpenAIEmbeddings(
-        model=os.environ["EMBEDDING_MODEL"],
-        api_key=os.environ["EMBEDDING_API_KEY"],
-        base_url=os.environ["EMBEDDING_URL"],
-        check_embedding_ctx_length=False,
-        chunk_size=BATCH_SIZE,
-    )
-
-
 def build_vector_store(chunks: list) -> Chroma:
-    import chromadb
-    from chromadb.config import Settings
-
-    # 重建索引时清空旧目录,保证幂等(重复运行不会叠加重复片段)
+    """分批向量化写入 ChromaDB;重建索引时清空旧目录,保证幂等(重复运行不会叠加重复片段)。"""
     if VECTOR_DIR.exists():
         print(f"⚠️ 已存在 {VECTOR_DIR.name}/,删除旧索引后重建 ...")
         shutil.rmtree(VECTOR_DIR)
+
+    import chromadb
+    from chromadb.config import Settings
 
     client = chromadb.PersistentClient(
         path=str(VECTOR_DIR),
@@ -105,7 +63,7 @@ def build_vector_store(chunks: list) -> Chroma:
         embedding_function=build_embeddings(),
     )
 
-    # ⚠️ 关键:按 20 条一批分批写入(该 embedding 模型的单请求上限)
+    # ⚠️ 关键:按 BATCH_SIZE 条一批分批写入(该 embedding 模型的单请求上限)
     total = len(chunks)
     for i in range(0, total, BATCH_SIZE):
         batch = chunks[i : i + BATCH_SIZE]
@@ -114,7 +72,8 @@ def build_vector_store(chunks: list) -> Chroma:
     return vs
 
 
-if __name__ == "__main__":
+def run() -> Chroma:
+    """完整建库流程(供 ingest_pdf.py 入口调用),含进度打印与检索冒烟测试。"""
     print(f"📄 解析 PDF: {PDF_PATH.name}")
     pages = load_pages()
     print(f"   共 {len(pages)} 页")
@@ -130,3 +89,4 @@ if __name__ == "__main__":
     print("\n🧪 冒烟测试 —— query='研究内容' top3:")
     for d in vs.similarity_search("研究内容", k=3):
         print(f"   第{d.metadata.get('page')}页: {d.page_content[:60]!r}...")
+    return vs

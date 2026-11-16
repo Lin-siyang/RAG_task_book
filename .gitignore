@@ -4,6 +4,8 @@
 # 任务书原始 PDF(版权文件,不入库)
 resources/
 
+evals/
+
 # 向量库数据(可由 01 脚本重建)
 chromadb_data/
 chroma_db/
