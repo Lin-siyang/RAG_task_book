@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from langchain.tools import tool
 
-from rag.config import SEP, TOP_K
+from rag.config.chroma_config import SEP, TOP_K
 from rag.vector_store import get_vector_store
 
-# 模块级单例:导入本模块即连库(与重构前 rag_agent.py 的行为一致,evals 依赖该加载副作用)
+# 模块级单例:导入本模块即连库(与重构前行为一致,evals 依赖该加载副作用)
 VECTOR_STORE = get_vector_store()
 
 

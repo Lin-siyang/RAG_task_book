@@ -14,3 +14,7 @@ pypdf>=6.10.2
 
 # 配置
 python-dotenv>=1.2.2
+
+# API 服务(api/main.py)
+fastapi>=0.115.0
+uvicorn>=0.30.0

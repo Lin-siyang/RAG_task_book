@@ -1,4 +1,4 @@
-"""LangGraph 图构建 —— agent / tools / judge / rewrite / generate 五节点 RAG 问答顾问。
+"""agent 创建流程 —— agent / tools / judge / rewrite / generate 五节点 RAG 问答顾问。
 
 图结构:
                     ┌──────────┐  无 tool_calls(闲聊/常识,直接回答)
@@ -31,11 +31,11 @@ from langchain.messages import HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from rag.config import DOC_NAME, MAX_REWRITES, SEP
+from agent.agent_tool import search_project_doc
+from rag.config.chroma_config import MAX_REWRITES, SEP
+from rag.config.prompt_config import DOC_NAME, load_prompt
 from rag.models import make_llm
-from rag.prompt_loader import load_prompt
-from rag.schemas import RagState, RelevanceGrade
-from rag.tools import search_project_doc
+from rag.schemas.models import RagState, RelevanceGrade
 
 # 提示词统一从 rag/prompts/ 加载(外置模板,便于调优与评审)
 AGENT_SYSTEM = load_prompt("agent_system", doc_name=DOC_NAME)

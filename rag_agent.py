@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from langchain.messages import HumanMessage  # noqa: E402
 
-from rag.config import SEP  # noqa: E402  eval 依赖的模块级片段分隔符
-from rag.graph import build_graph  # noqa: E402
+from agent.agent import build_graph  # noqa: E402
+from rag.config.chroma_config import SEP  # noqa: E402  eval 依赖的模块级片段分隔符
 
 GRAPH = build_graph()
 
