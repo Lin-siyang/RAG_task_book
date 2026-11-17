@@ -29,3 +29,11 @@ def chat_settings() -> dict:
         "api_key": os.environ["DEEPSEEK_API_KEY"],
         "base_url": os.environ["DEEPSEEK_BASE_URL"],
     }
+
+
+def reranker_path() -> str:
+    """BGE 重排模型本地路径(来自 .env 的 BGE_RERANKER_PATH,如 bge-reranker-v2-m3)。"""
+    path = os.getenv("BGE_RERANKER_PATH")
+    if not path:
+        raise RuntimeError("未配置 BGE_RERANKER_PATH(.env),无法加载重排模型")
+    return path

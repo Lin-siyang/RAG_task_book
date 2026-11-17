@@ -28,8 +28,10 @@ def warmup() -> None:
     """
     global _GRAPH
     from agent.agent import build_graph  # 导入 agent 包即连向量库(agent_tool 的加载副作用)
+    from rag.hybrid_search.reranker import get_reranker
 
     _GRAPH = build_graph()
+    get_reranker()
 
 
 def _graph():

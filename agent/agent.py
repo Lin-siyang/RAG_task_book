@@ -31,7 +31,7 @@ from langchain.messages import HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from agent.agent_tool import search_project_doc
+from agent.agent_tool import search_project_doc,hybrid_search_project_doc
 from rag.config.chroma_config import MAX_REWRITES, SEP
 from rag.config.prompt_config import DOC_NAME, load_prompt
 from rag.models import make_llm
@@ -46,7 +46,7 @@ GENERATE_SYSTEM = load_prompt("generate_system", doc_name=DOC_NAME)
 
 # ---------------------------------------------------------------- 节点 1:agent(带检索工具)
 def agent_node(state: RagState) -> dict:
-    llm = make_llm().bind_tools([search_project_doc])
+    llm = make_llm().bind_tools([hybrid_search_project_doc])
     response = llm.invoke([SystemMessage(AGENT_SYSTEM)] + state["messages"])
     return {"messages": [response]}
 
@@ -135,7 +135,7 @@ def generate_node(state: RagState) -> dict:
 def build_graph():
     g = StateGraph(RagState)
     g.add_node("agent", agent_node)
-    g.add_node("tools", ToolNode([search_project_doc]))
+    g.add_node("tools", ToolNode([hybrid_search_project_doc]))
     g.add_node("judge", judge_node)
     g.add_node("rewrite", rewrite_node)
     g.add_node("generate", generate_node)

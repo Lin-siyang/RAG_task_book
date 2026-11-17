@@ -52,7 +52,9 @@ ALLOWED_ORIGINS = [
 async def lifespan(app: FastAPI):
     """启动:加载知识库、准备 Agent(失败则服务起不来,快速暴露问题);关闭:无需清理(均为进程内资源)。"""
     chat_service.warmup()
-    print("✅ 知识库与 Agent 已就绪,可以接收请求")
+    print("----------------✅ 知识库与 Agent 已就绪-----------------")
+    print("----------------✅ Reranker模型已就绪-------------------")
+    print("--------------------可以接受请求--------------------")
     yield
 
 
